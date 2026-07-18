@@ -1,0 +1,46 @@
+name: Validate with Harbor
+
+on:
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install Harbor
+        run: |
+          python -m pip install uv
+          uv tool install harbor
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Run oracle
+        run: |
+          harbor --version
+          harbor run --path log-report --agent oracle --n-concurrent 1 --job-name oracle --jobs-dir harbor-jobs --yes --force-build
+
+      - name: Show oracle verifier evidence
+        run: |
+          find harbor-jobs/oracle -type f \( -name reward.txt -o -name ctrf.json \) -print -exec cat {} \;
+
+      - name: Run no-op agent
+        run: |
+          harbor run --path log-report --agent nop --n-concurrent 1 --job-name nop --jobs-dir harbor-jobs --yes --force-build
+
+      - name: Show no-op verifier evidence
+        run: |
+          find harbor-jobs/nop -type f \( -name reward.txt -o -name ctrf.json \) -print -exec cat {} \;
+
+      - name: Upload Harbor jobs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: harbor-jobs
+          path: harbor-jobs
